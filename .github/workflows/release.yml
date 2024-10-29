@@ -25,7 +25,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973ad74ed # v5
     - name: Generate Software Bill of Materials
-      uses: anchore/sbom-action@1ca97d9028b51809cf6d3c934c3e160716e1b605 # v0
+      uses: anchore/sbom-action@251a468eed47e5082b105c3ba6ee500c0e65a764 # v0
     - name: Import GPG key
       id: import_gpg
       uses: crazy-max/ghaction-import-gpg@cb9bde2e2525e640591a934b1fd28eef1dcaf5e5 # v6
