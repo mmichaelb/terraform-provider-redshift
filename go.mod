@@ -8,7 +8,7 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.32.3
 	github.com/aws/aws-sdk-go-v2/config v1.28.1
 	github.com/aws/aws-sdk-go-v2/credentials v1.17.42
-	github.com/aws/aws-sdk-go-v2/service/redshift v1.50.1
+	github.com/aws/aws-sdk-go-v2/service/redshift v1.51.0
 	github.com/aws/aws-sdk-go-v2/service/sts v1.32.3
 	github.com/hashicorp/terraform-plugin-docs v0.19.4
 	github.com/hashicorp/terraform-plugin-sdk/v2 v2.34.0
