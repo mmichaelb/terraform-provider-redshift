@@ -6,10 +6,10 @@ toolchain go1.23.3
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.32.4
-	github.com/aws/aws-sdk-go-v2/config v1.28.3
-	github.com/aws/aws-sdk-go-v2/credentials v1.17.44
-	github.com/aws/aws-sdk-go-v2/service/redshift v1.51.1
-	github.com/aws/aws-sdk-go-v2/service/sts v1.32.4
+	github.com/aws/aws-sdk-go-v2/config v1.28.4
+	github.com/aws/aws-sdk-go-v2/credentials v1.17.45
+	github.com/aws/aws-sdk-go-v2/service/redshift v1.52.0
+	github.com/aws/aws-sdk-go-v2/service/sts v1.33.0
 	github.com/hashicorp/terraform-plugin-docs v0.20.0
 	github.com/hashicorp/terraform-plugin-sdk/v2 v2.35.0
 	github.com/lib/pq v1.10.9
