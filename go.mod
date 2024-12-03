@@ -10,7 +10,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/credentials v1.17.46
 	github.com/aws/aws-sdk-go-v2/service/redshift v1.52.1
 	github.com/aws/aws-sdk-go-v2/service/sts v1.33.1
-	github.com/hashicorp/terraform-plugin-docs v0.20.0
+	github.com/hashicorp/terraform-plugin-docs v0.20.1
 	github.com/hashicorp/terraform-plugin-sdk/v2 v2.35.0
 	github.com/lib/pq v1.10.9
 	golang.org/x/net v0.31.0
