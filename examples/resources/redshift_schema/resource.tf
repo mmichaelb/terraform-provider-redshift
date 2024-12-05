@@ -90,7 +90,7 @@ resource "redshift_schema" "external_from_mysql" {
 }
 
 # External schema using federated query from Redshift data share database
-resource "redshift" "external_from_redshift" {
+resource "redshift_schema" "external_from_redshift" {
   name = "Sales_schema"
   owner = redshift_user.owner.name
   external_schema {
