@@ -19,6 +19,7 @@ const databaseDatashareSourceAttr = "datashare_source"
 const databaseDatashareSourceShareNameAttr = "share_name"
 const databaseDatashareSourceNamespaceAttr = "namespace"
 const databaseDatashareSourceAccountAttr = "account_id"
+const databaseDatashareSourceWithPermissions = "with_permissions"
 
 func redshiftDatabase() *schema.Resource {
 	return &schema.Resource{
@@ -87,6 +88,13 @@ func redshiftDatabase() *schema.Resource {
 							Description:  "The AWS account ID of the producer cluster.",
 							ValidateFunc: validation.StringMatch(awsAccountIdRegexp, "AWS account id must be a 12-digit number"),
 						},
+						databaseDatashareSourceWithPermissions: {
+							Type:        schema.TypeBool,
+							Optional:    true,
+							ForceNew:    true,
+							Description: "Whether the database requires object-level permissions to access individual database objects",
+							Default:     false,
+						},
 					},
 				},
 			},
@@ -119,8 +127,15 @@ func resourceRedshiftDatabaseCreate(db *DBConnection, d *schema.ResourceData) er
 
 func resourceRedshiftDatabaseCreateFromDatashare(db *DBConnection, d *schema.ResourceData) error {
 	dbName := d.Get(databaseNameAttr).(string)
+	query := fmt.Sprintf("CREATE DATABASE %s", pq.QuoteIdentifier(dbName))
+
+	if d.Get(fmt.Sprintf("%s.0.%s", databaseDatashareSourceAttr, databaseDatashareSourceWithPermissions)).(bool) {
+		query = fmt.Sprintf("%s WITH PERMISSIONS", query)
+	}
+
 	shareName := d.Get(fmt.Sprintf("%s.0.%s", databaseDatashareSourceAttr, databaseDatashareSourceShareNameAttr)).(string)
-	query := fmt.Sprintf("CREATE DATABASE %s FROM DATASHARE %s OF", pq.QuoteIdentifier(dbName), pq.QuoteIdentifier(shareName))
+	query = fmt.Sprintf("%s FROM DATASHARE %s OF", query, pq.QuoteIdentifier(shareName))
+
 	if sourceAccount, ok := d.GetOk(fmt.Sprintf("%s.0.%s", databaseDatashareSourceAttr, databaseDatashareSourceAccountAttr)); ok {
 		query = fmt.Sprintf("%s ACCOUNT '%s'", query, pqQuoteLiteral(sourceAccount.(string)))
 	}
