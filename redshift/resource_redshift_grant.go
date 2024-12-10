@@ -90,7 +90,7 @@ Defines access privileges for users and  groups. Privileges include access optio
 				Type:        schema.TypeString,
 				Optional:    true,
 				ForceNew:    true,
-				Description: "The name of the database to grant privileges on. Only used when `object_type` is `database`. By default, the database to which the provider is connected will be used",
+				Description: "The name of the database to grant privileges on. By default, the database to which the provider is connected will be used",
 			},
 			grantObjectTypeAttr: {
 				Type:         schema.TypeString,
@@ -211,6 +211,18 @@ func resourceRedshiftGrantRead(db *DBConnection, d *schema.ResourceData) error {
 
 func resourceRedshiftGrantReadImpl(db *DBConnection, d *schema.ResourceData) error {
 	objectType := d.Get(grantObjectTypeAttr).(string)
+	databaseName := db.client.databaseName
+	if database, ok := d.GetOk(grantDatabaseAttr); ok {
+		databaseName = database.(string)
+	}
+
+	datashare, err := isDatashare(db, databaseName)
+	if err != nil {
+		return err
+	}
+	if datashare && objectType != "database" {
+		return nil
+	}
 
 	switch objectType {
 	case "database":
@@ -709,7 +721,8 @@ func createGrantsRevokeQuery(d *schema.ResourceData, databaseName string) string
 		)
 	case "SCHEMA":
 		query = fmt.Sprintf(
-			"REVOKE ALL PRIVILEGES ON SCHEMA %s FROM %s %s",
+			"REVOKE ALL PRIVILEGES ON SCHEMA %s.%s FROM %s %s",
+			pq.QuoteIdentifier(databaseName),
 			pq.QuoteIdentifier(d.Get(grantSchemaAttr).(string)),
 			toWhomIndicator,
 			fromEntityName,
@@ -726,8 +739,9 @@ func createGrantsRevokeQuery(d *schema.ResourceData, databaseName string) string
 			)
 		} else {
 			query = fmt.Sprintf(
-				"REVOKE ALL PRIVILEGES ON ALL %sS IN SCHEMA %s FROM %s %s",
+				"REVOKE ALL PRIVILEGES ON ALL %sS IN SCHEMA %s.%s FROM %s %s",
 				strings.ToUpper(d.Get(grantObjectTypeAttr).(string)),
+				pq.QuoteIdentifier(databaseName),
 				pq.QuoteIdentifier(d.Get(grantSchemaAttr).(string)),
 				toWhomIndicator,
 				fromEntityName,
@@ -745,8 +759,9 @@ func createGrantsRevokeQuery(d *schema.ResourceData, databaseName string) string
 			)
 		} else {
 			query = fmt.Sprintf(
-				"REVOKE ALL PRIVILEGES ON ALL %sS IN SCHEMA %s FROM %s %s",
+				"REVOKE ALL PRIVILEGES ON ALL %sS IN SCHEMA %s.%s FROM %s %s",
 				strings.ToUpper(d.Get(grantObjectTypeAttr).(string)),
+				pq.QuoteIdentifier(databaseName),
 				pq.QuoteIdentifier(d.Get(grantSchemaAttr).(string)),
 				toWhomIndicator,
 				fromEntityName,
@@ -796,8 +811,9 @@ func createGrantsQuery(d *schema.ResourceData, databaseName string) string {
 		)
 	case "SCHEMA":
 		query = fmt.Sprintf(
-			"GRANT %s ON SCHEMA %s TO %s %s",
+			"GRANT %s ON SCHEMA %s.%s TO %s %s",
 			strings.Join(privileges, ","),
+			pq.QuoteIdentifier(databaseName),
 			pq.QuoteIdentifier(d.Get(grantSchemaAttr).(string)),
 			toWhomIndicator,
 			toEntityName,
@@ -815,9 +831,10 @@ func createGrantsQuery(d *schema.ResourceData, databaseName string) string {
 			)
 		} else {
 			query = fmt.Sprintf(
-				"GRANT %s ON ALL %sS IN SCHEMA %s TO %s %s",
+				"GRANT %s ON ALL %sS IN SCHEMA %s.%s TO %s %s",
 				strings.Join(privileges, ","),
 				strings.ToUpper(d.Get(grantObjectTypeAttr).(string)),
+				pq.QuoteIdentifier(databaseName),
 				pq.QuoteIdentifier(d.Get(grantSchemaAttr).(string)),
 				toWhomIndicator,
 				toEntityName,
@@ -836,9 +853,10 @@ func createGrantsQuery(d *schema.ResourceData, databaseName string) string {
 			)
 		} else {
 			query = fmt.Sprintf(
-				"GRANT %s ON ALL %sS IN SCHEMA %s TO %s %s",
+				"GRANT %s ON ALL %sS IN SCHEMA %s.%s TO %s %s",
 				strings.Join(privileges, ","),
 				strings.ToUpper(d.Get(grantObjectTypeAttr).(string)),
+				pq.QuoteIdentifier(databaseName),
 				pq.QuoteIdentifier(d.Get(grantSchemaAttr).(string)),
 				toWhomIndicator,
 				toEntityName,
@@ -858,6 +876,26 @@ func isGrantToPublic(d *schema.ResourceData) bool {
 	}
 
 	return false
+}
+
+func isDatashare(db *DBConnection, databaseName string) (bool, error) {
+	query := fmt.Sprintf(
+		"SELECT * FROM SVV_DATASHARES WHERE share_type = %s AND consumer_database = %s LIMIT 1",
+		pq.QuoteLiteral("INBOUND"),
+		pq.QuoteLiteral(databaseName),
+	)
+
+	rows, err := db.Query(query)
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+
+	if rows.Next() {
+		return true, nil
+	}
+
+	return false, nil
 }
 
 func generateGrantID(d *schema.ResourceData) string {
