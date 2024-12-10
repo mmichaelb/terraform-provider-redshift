@@ -15,6 +15,7 @@ import (
 const (
 	grantUserAttr       = "user"
 	grantGroupAttr      = "group"
+	grantDatabaseAttr   = "database"
 	grantSchemaAttr     = "schema"
 	grantObjectTypeAttr = "object_type"
 	grantObjectsAttr    = "objects"
@@ -85,6 +86,12 @@ Defines access privileges for users and  groups. Privileges include access optio
 				ForceNew:    true,
 				Description: "The database schema to grant privileges on.",
 			},
+			grantDatabaseAttr: {
+				Type:        schema.TypeString,
+				Optional:    true,
+				ForceNew:    true,
+				Description: "The name of the database to grant privileges on. By default, the database to which the provider is connected will be used",
+			},
 			grantObjectTypeAttr: {
 				Type:         schema.TypeString,
 				Required:     true,
@@ -147,17 +154,30 @@ func resourceRedshiftGrantCreate(db *DBConnection, d *schema.ResourceData) error
 		return fmt.Errorf("Invalid privileges list %v for object of type %s", privileges, objectType)
 	}
 
+	databaseName := db.client.databaseName
+	if database, ok := d.GetOk(grantDatabaseAttr); ok {
+		databaseName = database.(string)
+	}
+
 	tx, err := startTransaction(db.client, "")
 	if err != nil {
 		return err
 	}
 	defer deferredRollback(tx)
 
-	if err := revokeGrants(tx, db.client.databaseName, d); err != nil {
+	datashare, err := isDatashare(db, databaseName)
+	if err != nil {
 		return err
 	}
+	// Bug in redshift you must grant rights to a scheme before being
+	// able to revoke grants on it
+	if !(datashare && objectType == "schema") {
+		if err := revokeGrants(tx, databaseName, d); err != nil {
+			return err
+		}
+	}
 
-	if err := createGrants(tx, db.client.databaseName, d); err != nil {
+	if err := createGrants(tx, databaseName, d); err != nil {
 		return err
 	}
 
@@ -177,7 +197,12 @@ func resourceRedshiftGrantDelete(db *DBConnection, d *schema.ResourceData) error
 	}
 	defer deferredRollback(tx)
 
-	if err := revokeGrants(tx, db.client.databaseName, d); err != nil {
+	databaseName := db.client.databaseName
+	if database, ok := d.GetOk(grantDatabaseAttr); ok {
+		databaseName = database.(string)
+	}
+
+	if err := revokeGrants(tx, databaseName, d); err != nil {
 		return err
 	}
 
@@ -194,6 +219,18 @@ func resourceRedshiftGrantRead(db *DBConnection, d *schema.ResourceData) error {
 
 func resourceRedshiftGrantReadImpl(db *DBConnection, d *schema.ResourceData) error {
 	objectType := d.Get(grantObjectTypeAttr).(string)
+	databaseName := db.client.databaseName
+	if database, ok := d.GetOk(grantDatabaseAttr); ok {
+		databaseName = database.(string)
+	}
+
+	datashare, err := isDatashare(db, databaseName)
+	if err != nil {
+		return err
+	}
+	if datashare && objectType != "database" {
+		return nil
+	}
 
 	switch objectType {
 	case "database":
@@ -213,7 +250,12 @@ func resourceRedshiftGrantReadImpl(db *DBConnection, d *schema.ResourceData) err
 
 func readDatabaseGrants(db *DBConnection, d *schema.ResourceData) error {
 	var entityName, query string
-	var databaseCreate, databaseTemp bool
+	var databaseCreate, databaseTemp, databaseUsage bool
+
+	databaseName := db.client.databaseName
+	if database, ok := d.GetOk(grantDatabaseAttr); ok {
+		databaseName = database.(string)
+	}
 
 	_, isUser := d.GetOk(grantUserAttr)
 
@@ -222,7 +264,8 @@ func readDatabaseGrants(db *DBConnection, d *schema.ResourceData) error {
 		query = `
   SELECT
     decode(charindex('C',split_part(split_part(regexp_replace(replace(array_to_string(db.datacl, '|'), '"', ''),'group '||u.usename,'__avoidGroupPrivs__'), u.usename||'=', 2) ,'/',1)), 0,0,1) AS CREATE,
-    decode(charindex('T',split_part(split_part(regexp_replace(replace(array_to_string(db.datacl, '|'), '"', ''),'group '||u.usename,'__avoidGroupPrivs__'), u.usename||'=', 2) ,'/',1)), 0,0,1) AS TEMPORARY
+    decode(charindex('T',split_part(split_part(regexp_replace(replace(array_to_string(db.datacl, '|'), '"', ''),'group '||u.usename,'__avoidGroupPrivs__'), u.usename||'=', 2) ,'/',1)), 0,0,1) AS TEMPORARY,
+	decode(charindex('U',split_part(split_part(regexp_replace(replace(array_to_string(db.datacl, '|'), '"', ''),'group '||u.usename,'__avoidGroupPrivs__'), u.usename||'=', 2) ,'/',1)), 0,0,1) AS USAGE
   FROM pg_database db, pg_user u
   WHERE
     db.datname=$1 
@@ -233,7 +276,8 @@ func readDatabaseGrants(db *DBConnection, d *schema.ResourceData) error {
 		query = `
   SELECT
     decode(charindex('C',split_part(split_part(replace(array_to_string(db.datacl, '|'), '"', ''),'group ' || gr.groname,2 ) ,'/',1)), 0,0,1) AS CREATE,
-    decode(charindex('T',split_part(split_part(replace(array_to_string(db.datacl, '|'), '"', ''),'group ' || gr.groname,2 ) ,'/',1)), 0,0,1) AS TEMPORARY
+    decode(charindex('T',split_part(split_part(replace(array_to_string(db.datacl, '|'), '"', ''),'group ' || gr.groname,2 ) ,'/',1)), 0,0,1) AS TEMPORARY,
+	decode(charindex('U',split_part(split_part(replace(array_to_string(db.datacl, '|'), '"', ''),'group ' || gr.groname,2 ) ,'/',1)), 0,0,1) AS USAGE
   FROM pg_database db, pg_group gr
   WHERE
     db.datname=$1 
@@ -241,30 +285,32 @@ func readDatabaseGrants(db *DBConnection, d *schema.ResourceData) error {
 `
 	}
 
-	queryArgs := []interface{}{db.client.databaseName, entityName}
+	queryArgs := []interface{}{databaseName, entityName}
 
 	// Handle GRANT TO PUBLIC
 	if isGrantToPublic(d) {
 		query = `
   SELECT
     decode(charindex('C',split_part(split_part(regexp_replace(replace(array_to_string(db.datacl, '|'), '"', ''),'[^|]+=','__avoidUserPrivs__'), '=', 2) ,'/',1)), 0,0,1) AS CREATE,
-    decode(charindex('T',split_part(split_part(regexp_replace(replace(array_to_string(db.datacl, '|'), '"', ''),'[^|]+=','__avoidUserPrivs__'), '=', 2) ,'/',1)), 0,0,1) AS TEMPORARY
+    decode(charindex('T',split_part(split_part(regexp_replace(replace(array_to_string(db.datacl, '|'), '"', ''),'[^|]+=','__avoidUserPrivs__'), '=', 2) ,'/',1)), 0,0,1) AS TEMPORARY,
+	decode(charindex('U',split_part(split_part(regexp_replace(replace(array_to_string(db.datacl, '|'), '"', ''),'[^|]+=','__avoidUserPrivs__'), '=', 2) ,'/',1)), 0,0,1) AS USAGE
   FROM pg_database db
   WHERE
     db.datname=$1 
 `
-		queryArgs = []interface{}{db.client.databaseName}
+		queryArgs = []interface{}{databaseName}
 	}
 
-	if err := db.QueryRow(query, queryArgs...).Scan(&databaseCreate, &databaseTemp); err != nil {
+	if err := db.QueryRow(query, queryArgs...).Scan(&databaseCreate, &databaseTemp, &databaseUsage); err != nil {
 		return err
 	}
 
 	privileges := []string{}
 	appendIfTrue(databaseCreate, "create", &privileges)
 	appendIfTrue(databaseTemp, "temporary", &privileges)
+	appendIfTrue(databaseUsage, "usage", &privileges)
 
-	log.Printf("[DEBUG] Collected database '%s' privileges for %s: %v", db.client.databaseName, entityName, privileges)
+	log.Printf("[DEBUG] Collected database '%s' privileges for %s: %v", databaseName, entityName, privileges)
 
 	d.Set(grantPrivilegesAttr, privileges)
 
@@ -683,7 +729,8 @@ func createGrantsRevokeQuery(d *schema.ResourceData, databaseName string) string
 		)
 	case "SCHEMA":
 		query = fmt.Sprintf(
-			"REVOKE ALL PRIVILEGES ON SCHEMA %s FROM %s %s",
+			"REVOKE ALL PRIVILEGES ON SCHEMA %s.%s FROM %s %s",
+			pq.QuoteIdentifier(databaseName),
 			pq.QuoteIdentifier(d.Get(grantSchemaAttr).(string)),
 			toWhomIndicator,
 			fromEntityName,
@@ -700,8 +747,9 @@ func createGrantsRevokeQuery(d *schema.ResourceData, databaseName string) string
 			)
 		} else {
 			query = fmt.Sprintf(
-				"REVOKE ALL PRIVILEGES ON ALL %sS IN SCHEMA %s FROM %s %s",
+				"REVOKE ALL PRIVILEGES ON ALL %sS IN SCHEMA %s.%s FROM %s %s",
 				strings.ToUpper(d.Get(grantObjectTypeAttr).(string)),
+				pq.QuoteIdentifier(databaseName),
 				pq.QuoteIdentifier(d.Get(grantSchemaAttr).(string)),
 				toWhomIndicator,
 				fromEntityName,
@@ -719,8 +767,9 @@ func createGrantsRevokeQuery(d *schema.ResourceData, databaseName string) string
 			)
 		} else {
 			query = fmt.Sprintf(
-				"REVOKE ALL PRIVILEGES ON ALL %sS IN SCHEMA %s FROM %s %s",
+				"REVOKE ALL PRIVILEGES ON ALL %sS IN SCHEMA %s.%s FROM %s %s",
 				strings.ToUpper(d.Get(grantObjectTypeAttr).(string)),
+				pq.QuoteIdentifier(databaseName),
 				pq.QuoteIdentifier(d.Get(grantSchemaAttr).(string)),
 				toWhomIndicator,
 				fromEntityName,
@@ -770,8 +819,9 @@ func createGrantsQuery(d *schema.ResourceData, databaseName string) string {
 		)
 	case "SCHEMA":
 		query = fmt.Sprintf(
-			"GRANT %s ON SCHEMA %s TO %s %s",
+			"GRANT %s ON SCHEMA %s.%s TO %s %s",
 			strings.Join(privileges, ","),
+			pq.QuoteIdentifier(databaseName),
 			pq.QuoteIdentifier(d.Get(grantSchemaAttr).(string)),
 			toWhomIndicator,
 			toEntityName,
@@ -789,9 +839,10 @@ func createGrantsQuery(d *schema.ResourceData, databaseName string) string {
 			)
 		} else {
 			query = fmt.Sprintf(
-				"GRANT %s ON ALL %sS IN SCHEMA %s TO %s %s",
+				"GRANT %s ON ALL %sS IN SCHEMA %s.%s TO %s %s",
 				strings.Join(privileges, ","),
 				strings.ToUpper(d.Get(grantObjectTypeAttr).(string)),
+				pq.QuoteIdentifier(databaseName),
 				pq.QuoteIdentifier(d.Get(grantSchemaAttr).(string)),
 				toWhomIndicator,
 				toEntityName,
@@ -810,9 +861,10 @@ func createGrantsQuery(d *schema.ResourceData, databaseName string) string {
 			)
 		} else {
 			query = fmt.Sprintf(
-				"GRANT %s ON ALL %sS IN SCHEMA %s TO %s %s",
+				"GRANT %s ON ALL %sS IN SCHEMA %s.%s TO %s %s",
 				strings.Join(privileges, ","),
 				strings.ToUpper(d.Get(grantObjectTypeAttr).(string)),
+				pq.QuoteIdentifier(databaseName),
 				pq.QuoteIdentifier(d.Get(grantSchemaAttr).(string)),
 				toWhomIndicator,
 				toEntityName,
@@ -832,6 +884,26 @@ func isGrantToPublic(d *schema.ResourceData) bool {
 	}
 
 	return false
+}
+
+func isDatashare(db *DBConnection, databaseName string) (bool, error) {
+	query := fmt.Sprintf(
+		"SELECT * FROM SVV_DATASHARES WHERE share_type = %s AND consumer_database = %s LIMIT 1",
+		pq.QuoteLiteral("INBOUND"),
+		pq.QuoteLiteral(databaseName),
+	)
+
+	rows, err := db.Query(query)
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+
+	if rows.Next() {
+		return true, nil
+	}
+
+	return false, nil
 }
 
 func generateGrantID(d *schema.ResourceData) string {

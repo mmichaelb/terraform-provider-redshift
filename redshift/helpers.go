@@ -5,10 +5,11 @@ import (
 	"database/sql"
 	"encoding/csv"
 	"fmt"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"log"
 	"strings"
 	"time"
+
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/lib/pq"
@@ -183,7 +184,8 @@ func validatePrivileges(privileges []string, objectType string) bool {
 			}
 		case "DATABASE":
 			switch strings.ToUpper(p) {
-			case "CREATE", "TEMPORARY":
+			// USAGE is only available from databases created from datashares
+			case "CREATE", "TEMPORARY", "USAGE":
 				continue
 			default:
 				return false
