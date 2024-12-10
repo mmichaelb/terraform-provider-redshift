@@ -165,8 +165,16 @@ func resourceRedshiftGrantCreate(db *DBConnection, d *schema.ResourceData) error
 	}
 	defer deferredRollback(tx)
 
-	if err := revokeGrants(tx, databaseName, d); err != nil {
+	datashare, err := isDatashare(db, databaseName)
+	if err != nil {
 		return err
+	}
+	// Bug in redshift you must grant rights to a scheme before being
+	// able to revoke grants on it
+	if !(datashare && objectType == "schema") {
+		if err := revokeGrants(tx, databaseName, d); err != nil {
+			return err
+		}
 	}
 
 	if err := createGrants(tx, databaseName, d); err != nil {
