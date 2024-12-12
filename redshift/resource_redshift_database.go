@@ -259,6 +259,7 @@ WHERE pg_database_info.datid = $1
 		config[databaseDatashareSourceShareNameAttr] = &shareName
 		config[databaseDatashareSourceAccountAttr] = &producerAccount
 		config[databaseDatashareSourceNamespaceAttr] = &producerNamespace
+		config[databaseDatashareSourceWithPermissions] = d.Get(fmt.Sprintf("%s.0.%s", databaseDatashareSourceAttr, databaseDatashareSourceWithPermissions)).(bool)
 		dataShareConfiguration = append(dataShareConfiguration, config)
 	}
 	d.Set(databaseDatashareSourceAttr, dataShareConfiguration)
