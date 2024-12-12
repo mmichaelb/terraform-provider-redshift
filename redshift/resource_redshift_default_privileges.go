@@ -214,7 +214,7 @@ func resourceRedshiftDefaultPrivilegesReadImpl(db *DBConnection, d *schema.Resou
 }
 
 func readGroupTableDefaultPrivileges(tx *sql.Tx, d *schema.ResourceData, entityID, schemaID, ownerID int, entityIsUser bool) error {
-	var tableSelect, tableUpdate, tableInsert, tableDelete, tableDrop, tableReferences, tableRule, tableTrigger bool
+	var tableSelect, tableUpdate, tableInsert, tableDelete, tableDrop, tableReferences, tableRule, tableTrigger, tableTruncate bool
 	var query string
 
 	if entityIsUser {
@@ -227,7 +227,8 @@ func readGroupTableDefaultPrivileges(tx *sql.Tx, d *schema.ResourceData, entityI
 		decode(charindex('D',split_part(split_part(regexp_replace(replace(array_to_string(defaclacl, '|'), '"', ''), 'group '||u.usename), u.usename||'=', 2) ,'/',1)),0,0,1) AS DROP,
 		decode(charindex('x',split_part(split_part(regexp_replace(replace(array_to_string(defaclacl, '|'), '"', ''), 'group '||u.usename), u.usename||'=', 2) ,'/',1)),0,0,1) AS REFERENCES,
 		decode(charindex('R',split_part(split_part(regexp_replace(replace(array_to_string(defaclacl, '|'), '"', ''), 'group '||u.usename), u.usename||'=', 2) ,'/',1)),0,0,1) AS rule,
-		decode(charindex('t',split_part(split_part(regexp_replace(replace(array_to_string(defaclacl, '|'), '"', ''), 'group '||u.usename), u.usename||'=', 2) ,'/',1)),0,0,1) AS TRIGGER
+		decode(charindex('t',split_part(split_part(regexp_replace(replace(array_to_string(defaclacl, '|'), '"', ''), 'group '||u.usename), u.usename||'=', 2) ,'/',1)),0,0,1) AS TRIGGER,
+		decode(charindex('t',split_part(split_part(regexp_replace(replace(array_to_string(defaclacl, '|'), '"', ''), 'group '||u.usename), u.usename||'=', 2) ,'/',1)),0,0,1) AS TRUNCATE
 	      FROM pg_user u, pg_default_acl acl
 	      WHERE 
 		acl.defaclnamespace = $1
@@ -246,7 +247,8 @@ func readGroupTableDefaultPrivileges(tx *sql.Tx, d *schema.ResourceData, entityI
 		decode(charindex('D',split_part(split_part(replace(array_to_string(defaclacl, '|'), '"', ''),'group ' || gr.groname,2 ) ,'/',1)),0,0,1) AS DROP,
 		decode(charindex('x',split_part(split_part(replace(array_to_string(defaclacl, '|'), '"', ''),'group ' || gr.groname,2 ) ,'/',1)),0,0,1) AS REFERENCES,
 		decode(charindex('R',split_part(split_part(replace(array_to_string(defaclacl, '|'), '"', ''),'group ' || gr.groname,2 ) ,'/',1)),0,0,1) AS rule,
-		decode(charindex('t',split_part(split_part(replace(array_to_string(defaclacl, '|'), '"', ''),'group ' || gr.groname,2 ) ,'/',1)),0,0,1) AS TRIGGER
+		decode(charindex('t',split_part(split_part(replace(array_to_string(defaclacl, '|'), '"', ''),'group ' || gr.groname,2 ) ,'/',1)),0,0,1) AS TRIGGER,
+		decode(charindex('t',split_part(split_part(replace(array_to_string(defaclacl, '|'), '"', ''),'group ' || gr.groname,2 ) ,'/',1)),0,0,1) AS TRUNCATE
 	      FROM pg_group gr, pg_default_acl acl
 	      WHERE 
 		acl.defaclnamespace = $1
@@ -265,7 +267,8 @@ func readGroupTableDefaultPrivileges(tx *sql.Tx, d *schema.ResourceData, entityI
 		&tableDrop,
 		&tableReferences,
 		&tableRule,
-		&tableTrigger); err != nil && err != sql.ErrNoRows {
+		&tableTrigger,
+		&tableTruncate); err != nil && err != sql.ErrNoRows {
 		return fmt.Errorf("failed to collect privileges: %w", err)
 	}
 
@@ -278,6 +281,7 @@ func readGroupTableDefaultPrivileges(tx *sql.Tx, d *schema.ResourceData, entityI
 	appendIfTrue(tableReferences, "references", &privileges)
 	appendIfTrue(tableRule, "rule", &privileges)
 	appendIfTrue(tableTrigger, "trigger", &privileges)
+	appendIfTrue(tableTruncate, "truncate", &privileges)
 
 	log.Printf("[DEBUG] Collected privileges for ID %d: %v\n", entityID, privileges)
 

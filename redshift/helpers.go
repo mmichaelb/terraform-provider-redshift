@@ -5,11 +5,11 @@ import (
 	"database/sql"
 	"encoding/csv"
 	"fmt"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"log"
 	"strings"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/lib/pq"
 )
@@ -176,7 +176,7 @@ func validatePrivileges(privileges []string, objectType string) bool {
 			}
 		case "TABLE":
 			switch strings.ToUpper(p) {
-			case "SELECT", "UPDATE", "INSERT", "DELETE", "DROP", "REFERENCES", "RULE", "TRIGGER":
+			case "SELECT", "UPDATE", "INSERT", "DELETE", "DROP", "REFERENCES", "RULE", "TRIGGER", "TRUNCATE":
 				continue
 			default:
 				return false

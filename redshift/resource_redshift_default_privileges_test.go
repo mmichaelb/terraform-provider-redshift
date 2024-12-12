@@ -38,14 +38,14 @@ func TestAccRedshiftDefaultPrivileges_Basic(t *testing.T) {
 		  group = redshift_group.group.name
 		  owner = "root"
 		  object_type = "table"
-		  privileges = ["select", "update", "insert", "delete", "drop", "references", "rule", "trigger"]
+		  privileges = ["select", "update", "insert", "delete", "drop", "references", "rule", "trigger", "truncate"]
 		}
 		
 		resource "redshift_default_privileges" "user" {
 		  user = redshift_user.user.name
 		  owner = "root"
 		  object_type = "table"
-		  privileges = ["select", "update", "insert", "delete", "drop", "references", "rule", "trigger"]
+		  privileges = ["select", "update", "insert", "delete", "drop", "references", "rule", "trigger", "truncate"]
 		}
 		`, groupName, userName)
 		resource.Test(t, resource.TestCase{
@@ -68,6 +68,7 @@ func TestAccRedshiftDefaultPrivileges_Basic(t *testing.T) {
 						resource.TestCheckTypeSetElemAttr("redshift_default_privileges.group", "privileges.*", "references"),
 						resource.TestCheckTypeSetElemAttr("redshift_default_privileges.group", "privileges.*", "rule"),
 						resource.TestCheckTypeSetElemAttr("redshift_default_privileges.group", "privileges.*", "trigger"),
+						resource.TestCheckTypeSetElemAttr("redshift_default_privileges.group", "privileges.*", "truncate"),
 
 						resource.TestCheckResourceAttr("redshift_default_privileges.user", "id", fmt.Sprintf("un:%s_noschema_on:root_ot:table", userName)),
 						resource.TestCheckResourceAttr("redshift_default_privileges.user", "user", userName),
@@ -81,6 +82,7 @@ func TestAccRedshiftDefaultPrivileges_Basic(t *testing.T) {
 						resource.TestCheckTypeSetElemAttr("redshift_default_privileges.user", "privileges.*", "references"),
 						resource.TestCheckTypeSetElemAttr("redshift_default_privileges.user", "privileges.*", "rule"),
 						resource.TestCheckTypeSetElemAttr("redshift_default_privileges.user", "privileges.*", "trigger"),
+						resource.TestCheckTypeSetElemAttr("redshift_default_privileges.user", "privileges.*", "truncate"),
 					),
 				},
 			},
@@ -114,14 +116,14 @@ func TestAccRedshiftDefaultPrivileges_UpdateToRevoke(t *testing.T) {
 		  group = redshift_group.group.name
 		  owner = "root"
 		  object_type = "table"
-		  privileges = ["select", "update", "insert", "delete", "drop", "references", "rule", "trigger"]
+		  privileges = ["select", "update", "insert", "delete", "drop", "references", "rule", "trigger", "truncate"]
 		}
 		
 		resource "redshift_default_privileges" "user" {
 		  user = redshift_user.user.name
 		  owner = "root"
 		  object_type = "table"
-		  privileges = ["select", "update", "insert", "delete", "drop", "references", "rule", "trigger"]
+		  privileges = ["select", "update", "insert", "delete", "drop", "references", "rule", "trigger", "truncate"]
 		}
 		`, groupName, userName)
 
@@ -169,6 +171,7 @@ func TestAccRedshiftDefaultPrivileges_UpdateToRevoke(t *testing.T) {
 						resource.TestCheckTypeSetElemAttr("redshift_default_privileges.group", "privileges.*", "references"),
 						resource.TestCheckTypeSetElemAttr("redshift_default_privileges.group", "privileges.*", "rule"),
 						resource.TestCheckTypeSetElemAttr("redshift_default_privileges.group", "privileges.*", "trigger"),
+						resource.TestCheckTypeSetElemAttr("redshift_default_privileges.group", "privileges.*", "truncate"),
 
 						resource.TestCheckResourceAttr("redshift_default_privileges.user", "id", fmt.Sprintf("un:%s_noschema_on:root_ot:table", userName)),
 						resource.TestCheckResourceAttr("redshift_default_privileges.user", "user", userName),
@@ -182,6 +185,7 @@ func TestAccRedshiftDefaultPrivileges_UpdateToRevoke(t *testing.T) {
 						resource.TestCheckTypeSetElemAttr("redshift_default_privileges.user", "privileges.*", "references"),
 						resource.TestCheckTypeSetElemAttr("redshift_default_privileges.user", "privileges.*", "rule"),
 						resource.TestCheckTypeSetElemAttr("redshift_default_privileges.user", "privileges.*", "trigger"),
+						resource.TestCheckTypeSetElemAttr("redshift_default_privileges.group", "privileges.*", "truncate"),
 					),
 				},
 				{

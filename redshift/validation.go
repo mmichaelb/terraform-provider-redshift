@@ -152,6 +152,7 @@ var reservedWords = []string{
 	"trailing",
 	"trigger",
 	"true",
+	"truncate",
 	"truncatecolumns",
 	"union",
 	"unique",

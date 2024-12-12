@@ -349,7 +349,8 @@ func readTableGrants(db *DBConnection, d *schema.ResourceData) error {
     decode(charindex('D',split_part(split_part(regexp_replace(replace(array_to_string(relacl, '|'), '"', ''),'group '||u.usename), u.usename||'=', 2) ,'/',1)),NULL,0,0,0,1) AS DROP,
     decode(charindex('x',split_part(split_part(regexp_replace(replace(array_to_string(relacl, '|'), '"', ''),'group '||u.usename), u.usename||'=', 2) ,'/',1)),NULL,0,0,0,1) AS REFERENCES,
     decode(charindex('R',split_part(split_part(regexp_replace(replace(array_to_string(relacl, '|'), '"', ''),'group '||u.usename), u.usename||'=', 2) ,'/',1)),NULL,0,0,0,1) AS rule,
-    decode(charindex('t',split_part(split_part(regexp_replace(replace(array_to_string(relacl, '|'), '"', ''),'group '||u.usename), u.usename||'=', 2) ,'/',1)),NULL,0,0,0,1) AS TRIGGER
+    decode(charindex('t',split_part(split_part(regexp_replace(replace(array_to_string(relacl, '|'), '"', ''),'group '||u.usename), u.usename||'=', 2) ,'/',1)),NULL,0,0,0,1) AS TRIGGER,
+    decode(charindex('t',split_part(split_part(regexp_replace(replace(array_to_string(relacl, '|'), '"', ''),'group '||u.usename), u.usename||'=', 2) ,'/',1)),NULL,0,0,0,1) AS TRUNCATE
   FROM pg_user u, pg_class cl
   JOIN pg_namespace nsp ON nsp.oid = cl.relnamespace
   WHERE
@@ -369,7 +370,8 @@ func readTableGrants(db *DBConnection, d *schema.ResourceData) error {
     decode(charindex('D',split_part(split_part(replace(array_to_string(relacl, '|'), '"', ''),'group ' || gr.groname || '=',2 ) ,'/',1)), NULL,0, 0,0, 1) AS DROP,
     decode(charindex('x',split_part(split_part(replace(array_to_string(relacl, '|'), '"', ''),'group ' || gr.groname || '=',2 ) ,'/',1)), NULL,0, 0,0, 1) AS REFERENCES,
     decode(charindex('R',split_part(split_part(replace(array_to_string(relacl, '|'), '"', ''),'group ' || gr.groname || '=',2 ) ,'/',1)), NULL,0, 0,0, 1) AS rule,
-    decode(charindex('t',split_part(split_part(replace(array_to_string(relacl, '|'), '"', ''),'group ' || gr.groname || '=',2 ) ,'/',1)), NULL,0, 0,0, 1) AS TRIGGER
+    decode(charindex('t',split_part(split_part(replace(array_to_string(relacl, '|'), '"', ''),'group ' || gr.groname || '=',2 ) ,'/',1)), NULL,0, 0,0, 1) AS TRIGGER,
+    decode(charindex('t',split_part(split_part(replace(array_to_string(relacl, '|'), '"', ''),'group ' || gr.groname || '=',2 ) ,'/',1)), NULL,0, 0,0, 1) AS TRUNCATE
   FROM pg_group gr, pg_class cl
   JOIN pg_namespace nsp ON nsp.oid = cl.relnamespace
   WHERE
@@ -396,7 +398,8 @@ func readTableGrants(db *DBConnection, d *schema.ResourceData) error {
 		  decode(charindex('D',split_part(split_part(regexp_replace(replace(array_to_string(relacl, '|'), '"', ''),'[^|]+=','__avoidUserPrivs__'), '=', 2) ,'/',1)),NULL,0,0,0,1) AS DROP,
 		  decode(charindex('x',split_part(split_part(regexp_replace(replace(array_to_string(relacl, '|'), '"', ''),'[^|]+=','__avoidUserPrivs__'), '=', 2) ,'/',1)),NULL,0,0,0,1) AS REFERENCES,
 		  decode(charindex('R',split_part(split_part(regexp_replace(replace(array_to_string(relacl, '|'), '"', ''),'[^|]+=','__avoidUserPrivs__'), '=', 2) ,'/',1)),NULL,0,0,0,1) AS rule,
-		  decode(charindex('t',split_part(split_part(regexp_replace(replace(array_to_string(relacl, '|'), '"', ''),'[^|]+=','__avoidUserPrivs__'), '=', 2) ,'/',1)),NULL,0,0,0,1) AS TRIGGER
+		  decode(charindex('t',split_part(split_part(regexp_replace(replace(array_to_string(relacl, '|'), '"', ''),'[^|]+=','__avoidUserPrivs__'), '=', 2) ,'/',1)),NULL,0,0,0,1) AS TRIGGER,
+		  decode(charindex('t',split_part(split_part(regexp_replace(replace(array_to_string(relacl, '|'), '"', ''),'[^|]+=','__avoidUserPrivs__'), '=', 2) ,'/',1)),NULL,0,0,0,1) AS TRUNCATE
 		FROM pg_class cl
 		JOIN pg_namespace nsp ON nsp.oid = cl.relnamespace
 		WHERE
@@ -416,9 +419,9 @@ func readTableGrants(db *DBConnection, d *schema.ResourceData) error {
 
 	for rows.Next() {
 		var objName string
-		var tableSelect, tableUpdate, tableInsert, tableDelete, tableDrop, tableReferences, tableRule, tableTrigger bool
+		var tableSelect, tableUpdate, tableInsert, tableDelete, tableDrop, tableReferences, tableRule, tableTrigger, tableTruncate bool
 
-		if err := rows.Scan(&objName, &tableSelect, &tableUpdate, &tableInsert, &tableDelete, &tableDrop, &tableReferences, &tableRule, &tableTrigger); err != nil {
+		if err := rows.Scan(&objName, &tableSelect, &tableUpdate, &tableInsert, &tableDelete, &tableDrop, &tableReferences, &tableRule, &tableTrigger, &tableTruncate); err != nil {
 			return err
 		}
 
@@ -450,6 +453,9 @@ func readTableGrants(db *DBConnection, d *schema.ResourceData) error {
 		}
 		if tableTrigger {
 			privilegesSet.Add("trigger")
+		}
+		if tableTruncate {
+			privilegesSet.Add("truncate")
 		}
 
 		if !privilegesSet.Equal(d.Get(grantPrivilegesAttr).(*schema.Set)) {
