@@ -154,10 +154,7 @@ func resourceRedshiftGrantCreate(db *DBConnection, d *schema.ResourceData) error
 		return fmt.Errorf("Invalid privileges list %v for object of type %s", privileges, objectType)
 	}
 
-	databaseName := db.client.databaseName
-	if database, ok := d.GetOk(grantDatabaseAttr); ok {
-		databaseName = database.(string)
-	}
+	databaseName := getDatabaseName(db, d)
 
 	tx, err := startTransaction(db.client, "")
 	if err != nil {
@@ -189,10 +186,7 @@ func resourceRedshiftGrantDelete(db *DBConnection, d *schema.ResourceData) error
 	}
 	defer deferredRollback(tx)
 
-	databaseName := db.client.databaseName
-	if database, ok := d.GetOk(grantDatabaseAttr); ok {
-		databaseName = database.(string)
-	}
+	databaseName := getDatabaseName(db, d)
 
 	if err := revokeGrants(tx, databaseName, d); err != nil {
 		return err
@@ -232,10 +226,7 @@ func readDatabaseGrants(db *DBConnection, d *schema.ResourceData) error {
 	var entityName, query string
 	var databaseCreate, databaseTemp, databaseUsage bool
 
-	databaseName := db.client.databaseName
-	if database, ok := d.GetOk(grantDatabaseAttr); ok {
-		databaseName = database.(string)
-	}
+	databaseName := getDatabaseName(db, d)
 
 	_, isUser := d.GetOk(grantUserAttr)
 
@@ -848,6 +839,14 @@ func createGrantsQuery(d *schema.ResourceData, databaseName string) string {
 
 	log.Printf("[DEBUG] Created GRANT query: %s", query)
 	return query
+}
+
+func getDatabaseName(db *DBConnection, d *schema.ResourceData) string {
+	databaseName := db.client.databaseName
+	if database, ok := d.GetOk(grantDatabaseAttr); ok {
+		databaseName = database.(string)
+	}
+	return databaseName
 }
 
 func isGrantToPublic(d *schema.ResourceData) bool {
