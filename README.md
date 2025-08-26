@@ -1,3 +1,6 @@
+> [!NOTE]
+> This repository is archived and now read-only. Feel free to checkout the fork from DB Systel at https://github.com/dbsystel/terraform-provider-redshift/
+
 # Terraform Provider for AWS Redshift
 
 This provider allows to manage with Terraform [AWS Redshift](https://aws.amazon.com/redshift/) objects like users, groups, schemas, etc..
